@@ -1,0 +1,14 @@
+[
+  {"id":"doc01","partition":"research_public","source":"demo/research-public.md","text":"合成示例：公开行业研究应同时包含假设、数据出处与时间范围。"},
+  {"id":"doc02","partition":"research_macro","source":"demo/macro.md","text":"合成示例：宏观分析应分别讨论利率、通胀和流动性变量。"},
+  {"id":"doc03","partition":"research_sector","source":"demo/sector.md","text":"合成示例：新能源汽车产业研究示范材料，涵盖竞争格局和技术路线。"},
+  {"id":"doc04","partition":"research_companies","source":"demo/companies.md","text":"合成示例：公司研究采用财务表现、商业模式、管理团队等维度。"},
+  {"id":"doc05","partition":"deal_public","source":"demo/deal-public.md","text":"合成示例：交易执行公开流程包括立项、尽调、审批和交割。"},
+  {"id":"doc06","partition":"deal_pipeline","source":"demo/pipeline.md","text":"合成示例：交易机会池包含内部优先级和推进节点，不得向未授权角色暴露。"},
+  {"id":"doc07","partition":"deal_diligence","source":"demo/diligence.md","text":"合成示例：受限尽职调查清单包含尚未公开的风险问题。"},
+  {"id":"doc08","partition":"deal_execution","source":"demo/execution.md","text":"合成示例：交易交割受限文件记录签批步骤和内部责任人。"},
+  {"id":"doc09","partition":"company_public","source":"demo/company-public.md","text":"合成示例：公司共享流程包括会议纪要模板及公开联系方式。"},
+  {"id":"doc10","partition":"company_ir","source":"demo/ir.md","text":"合成示例：IR 专属答疑话术须经授权审批，不与财务受限资料混用。"},
+  {"id":"doc11","partition":"company_finance","source":"demo/finance.md","text":"合成示例：财务受限制度规定报销需取得对应审批依据。"},
+  {"id":"doc12","partition":"company_ops","source":"demo/ops.md","text":"合成示例：运营岗负责会议室资源安排和行政物资登记。"}
+]

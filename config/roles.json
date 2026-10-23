@@ -1,0 +1,108 @@
+{
+  "investor": {
+    "display_name": "投资研究",
+    "prompt_profile": "以证据和来源为中心完成行业与公司研究。",
+    "allowed_partitions": [
+      "research_public",
+      "research_macro",
+      "research_sector",
+      "research_companies",
+      "deal_public"
+    ],
+    "allowed_tools": [
+      "search_knowledge",
+      "research_plan"
+    ]
+  },
+  "ir": {
+    "display_name": "投资者关系",
+    "prompt_profile": "仅在已授权的披露与公共材料范围内回答问题。",
+    "allowed_partitions": [
+      "research_public",
+      "deal_public",
+      "company_public",
+      "company_ir"
+    ],
+    "allowed_tools": [
+      "search_knowledge",
+      "research_plan"
+    ]
+  },
+  "finance": {
+    "display_name": "财务",
+    "prompt_profile": "处理经批准的财务文档，不执行任意代码或系统操作。",
+    "allowed_partitions": [
+      "company_public",
+      "company_finance"
+    ],
+    "allowed_tools": [
+      "search_knowledge",
+      "parse_approved_pdf"
+    ],
+    "approved_pdf_ids": [
+      "sample-finance-policy"
+    ]
+  },
+  "ops": {
+    "display_name": "企业运营",
+    "prompt_profile": "根据内部流程文档回答运营问题。",
+    "allowed_partitions": [
+      "company_public",
+      "company_ops"
+    ],
+    "allowed_tools": [
+      "search_knowledge"
+    ]
+  },
+  "admin": {
+    "display_name": "管理员",
+    "prompt_profile": "用于离线演示和管理测试；生产环境需独立授权系统。",
+    "allowed_partitions": [
+      "research_public",
+      "research_macro",
+      "research_sector",
+      "research_companies",
+      "deal_public",
+      "deal_pipeline",
+      "deal_diligence",
+      "deal_execution",
+      "company_public",
+      "company_ir",
+      "company_finance",
+      "company_ops"
+    ],
+    "allowed_tools": [
+      "search_knowledge",
+      "research_plan",
+      "parse_approved_pdf"
+    ]
+  },
+  "deal": {
+    "display_name": "交易执行",
+    "prompt_profile": "仅按获准的交易流程与尽调资料执行，不对外披露交易机会与受限信息。",
+    "allowed_partitions": [
+      "research_public",
+      "deal_public",
+      "deal_pipeline",
+      "deal_diligence",
+      "deal_execution"
+    ],
+    "allowed_tools": [
+      "search_knowledge",
+      "research_plan"
+    ]
+  },
+  "compliance": {
+    "display_name": "合规与风控",
+    "prompt_profile": "针对已授权业务范围执行风险复核；不能通过审计身份获取全部文件。",
+    "allowed_partitions": [
+      "company_public",
+      "deal_public",
+      "deal_diligence"
+    ],
+    "allowed_tools": [
+      "search_knowledge",
+      "research_plan"
+    ]
+  }
+}
