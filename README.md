@@ -1,8 +1,8 @@
 # RoleDock — 企业多角色 Agent 系统（独立复刻）
 
-> **边界声明**：本仓库从公开简历描述出发进行独立重构，不包含 ATM Capital 的源代码、商业信息、生产配置、真实文档或原始评测集。所有演示文档与攻击集均为合成数据。这里展示的是新的可验证实现，不代表原公司实际部署情况。
+> **边界声明**：本仓库从简历描述出发进行独立重构，不包含 ATM Capital 的源代码、商业信息、生产配置、真实文档或原始评测集。所有演示文档与攻击集均为合成数据。这里展示的是新的可验证实现，不代表原公司实际部署情况。
 
-**当前状态：v0.3 / 功能性开发版本，不可公网部署。** GitHub PR #1 中持续开发。具备离线演示，以及可选择接入 **Qdrant + FastEmbed** 和 **LangGraph + OpenAI-Compatible Chat Completions** 的代码路径。
+**当前状态：v0.4 / 功能性开发版本，不可公网部署。** GitHub PR #1 中持续开发。具备离线演示，以及可选择接入 **Qdrant + FastEmbed** 和 **LangGraph + OpenAI-Compatible Chat Completions** 的代码路径。
 
 ## 架构与信任边界
 
@@ -81,7 +81,7 @@ roledock-agent '帮我规划新能源汽车行业研究' --role investor --check
 roledock-agent '帮我检索新能源汽车研究材料' --role investor --no-model --checkpoint .state/graph.sqlite
 ```
 
-Graph path: `load_role → route → {knowledge_expert | research_expert | document_expert | policy_denied} → finish`。`SqliteSaver` 中的任务状态可在重启后检查；**这一版只证明已完成步骤的 checkpoint 持久化，不声称支持任意中断后的安全重试或 HITL**。Checkpoint 可能存储检索正文，必须使用私有目录、限制操作系统权限，并制定保留/删除策略。
+Graph path: `load_role → route → {knowledge_expert | research_expert | document_expert | policy_denied} → finish`。`SqliteSaver` 中的任务状态可在重启后检查；**此旧版 CLI 路径仅证明已完成步骤的 checkpoint 持久化；v0.4 的真正 HITL 仅在第④节新增的 `/v1/runtime/*` 路径中启用，仍不保证任意工具的 exactly-once 重试**。Checkpoint 可能存储检索正文，必须使用私有目录、限制操作系统权限，并制定保留/删除策略。
 
 如需本地通过 API 调用模型 Agent：
 
@@ -111,3 +111,37 @@ pytest -q tests/test_integrations.py  # real Qdrant local + LangGraph + SQLite (
 **安全警示**：此仓库使用公开 Demo API Keys，只允许回环地址本地运行。不存在真正的企业 SSO、租户隔离、密钥轮换、输入配额、PII 清洗、完整审计保留或任意中断后幂等恢复。千万不要把 demo 直接部署到公网。
 
 详见 [架构](docs/ARCHITECTURE.md)、[设计决策](docs/DECISIONS.md)、[下一步](docs/NEXT_PHASE.md)。
+
+## ④ v0.4 持久化人工审批 / 中断恢复（localhost demo）
+
+安装完整依赖后，执行以下命令（仍然不需要聊天模型 API Key）：
+
+```bash
+python -m pip install -e '.[all]'
+# Linux/macOS: export ROLEDOCK_ENABLE_RUNTIME_API=1
+# PowerShell: $env:ROLEDOCK_ENABLE_RUNTIME_API='1'
+# The default is no-model, permission-checked routing.
+uvicorn roledock.api:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+`POST /v1/runtime/tasks` 必须有 `X-Demo-Key: demo-finance-key`，JSON 示例：
+
+```json
+{"question":"解析pdf","file_id":"sample-finance-policy","request_key":"finance-demo-01"}
+```
+
+返回 `pending_approval` 与 `task_id`；重试**相同**请求和 `request_key` 返回同一个任务，修改内容后重用相同键则返回 HTTP 409。此处注册的 PDF 是代码现场生成的 **纯虚构样本**，不包含真实雇主材料。
+
+使用 `X-Demo-Key: demo-compliance-key` 审批：
+
+```text
+GET  /v1/runtime/reviews/{task_id}
+POST /v1/runtime/tasks/{task_id}/review
+Body: {"approved":true}  # false means reject
+```
+
+审批通过后，LangGraph 从 SQLite Checkpointer 恢复，**重新校验**用户工具白名单与批准文件 ID，然后才真正解析 PDF。原始请求者通过 `GET /v1/runtime/tasks/{task_id}` 获取结果；审批者只能获得状态，不会收到 PDF 正文。非合规/管理员无法审批，请求者也不能自己审批。
+
+**这不是企业级 exactly-once 保障。** SQLite task ledger 为请求建立幂等登记、审计审批决定；LangGraph 的 `interrupt()` 保证待审批流程可以重启后恢复。对于已经启动但中途崩溃的非审批节点，系统采取失败封闭处理，不自动重放。真实有副作用的工具需要独立事务外盒/幂等键/租约和一致性补偿。`.state/` 内的 checkpoint **仍可能包含原始问题和解析文本**，须限制文件权限并定期清理；不能公网部署，不能开多个 Uvicorn worker 共用此 SQLite 目录。
+
+完整测试包括纯 Python TaskLedger 权限与重试测试，以及 GitHub Actions 中真实 LangGraph interrupt/SQLite 重启恢复、越权/拒绝、伪造 resume 的集成测试；**不在 CI 调用真实大模型或下载 BGE**。

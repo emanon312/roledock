@@ -28,3 +28,16 @@ def parse_approved_pdf(profile: RoleProfile, file_id: str, registry: ApprovedPdf
         if pdf.page_count > MAX_PAGES:
             raise ValueError("pdf_page_limit")
         return "\n".join(page.get_text(sort=True) for page in pdf)
+
+
+def synthetic_finance_pdf_registry() -> ApprovedPdfRegistry:
+    """Explicitly generated fake finance policy for the localhost HITL demo.
+
+    Not a document from ATM Capital or any real institution.
+    """
+    with fitz.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "RoleDock synthetic finance policy (demo only)")
+        page.insert_text((72, 92), "Payment review needs two-person approval.")
+        data = document.tobytes()
+    return ApprovedPdfRegistry({"sample-finance-policy": data})

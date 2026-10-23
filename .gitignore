@@ -5,6 +5,7 @@ __pycache__/
 .env
 *.sqlite*
 .qdrant/
+.state/
 *.log
 *.pdf
 !docs/*.pdf

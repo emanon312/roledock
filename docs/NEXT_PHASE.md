@@ -1,4 +1,4 @@
-# RoleDock v0.3 / 迭代验收
+# RoleDock v0.4 / 迭代验收
 
 ## 已编码、可运行的部分
 - OpenAI-Compatible SDK adapter (Chat Completions only); injectable fake client; `api_key/base_url/model` environment variables
@@ -24,3 +24,28 @@
 1. 加权召回与引用精度的离线评测集，量化 Recall@K 和分区泄露率。
 2. 引入可信文件存储与 Qdrant collection 别名迁移，避免在线索引销毁与 stale source。
 3. 引入真正的 `interrupt` 人工确认和审批签名、恢复幂等性测试。
+
+
+## v0.4 additions
+- LangGraph `interrupt()` gate for approved finance PDF parsing, with actual
+  `Command(resume=...)` after independent reviewer decision; document ACL
+  rechecked on resume
+- SQLite-backed metadata-only task ledger, approval journal, actor/request-key
+  scoped de-duplication and stable task ID
+- Persisted checkpoint + review state across simulated restarts
+- Opt-in localhost runtime endpoints: submit, get owner state, review preview,
+  approve/reject; metadata-only reviewer responses
+- Local unit tests plus CI-only real LangGraph + SQLite interrupt/resume tests
+
+## v0.4 explicit non-goals
+- Not an exactly-once distributed workflow engine or crash-proof general tool
+  runner. Only interrupted approvals are safely resumed with this implementation
+- No enterprise production identity provider, tenant isolation, queue, retention
+  daemon, secure secrets vault or remote state store
+- No live LLM or BGE ONNX model download in CI; uses deterministic local routes
+- Public GitHub repo is a sanitized replica: never use internal customer data
+
+## Suggested v0.5
+- Persistent immutable document versions, SourceStore and migration-safe Qdrant
+- Task metrics & structured event IDs, failure recovery and idempotent outbox
+- AuthN hardening, reviewer group membership and policies with TTL/expiry

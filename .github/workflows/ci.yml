@@ -27,4 +27,4 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install -e '.[all]'
       - name: Qdrant local and LangGraph SQLite integration (no API tokens)
-        run: python -m pytest -q tests/test_integrations.py tests/test_qdrant_unit.py tests/test_model_provider.py
+        run: python -m pytest -q tests/test_integrations.py tests/test_qdrant_unit.py tests/test_model_provider.py tests/test_durable_runtime.py tests/test_runtime_api.py

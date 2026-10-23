@@ -1,4 +1,4 @@
-# Architecture (v0.3)
+# Architecture (v0.4)
 
 ```text
 X-Demo-Key → Principal derived server-side → Role Profile
@@ -23,3 +23,41 @@ X-Demo-Key → Principal derived server-side → Role Profile
 **Offline**: deterministic lexical retrieval, role-aware router, local API without provider credentials.
 **Integrated opt-in**: FastEmbed local BGE embeddings, Qdrant search, LangGraph expert graph, OpenAI-Compatible model, SQLite checkpoint example.
 **Not provided**: enterprise SSO, actual provider availability, complete fault recovery, SiYuan syncing, production multi-tenant deployment.
+
+
+## v0.4 local durable runtime
+
+```text
+POST /v1/runtime/tasks [authenticated role, request_key]
+    → ledger: UNIQUE(actor, request_key) + request fingerprint
+    → LangGraph: load_role → route + permission gate
+          ├─ knowledge / research → finish
+          └─ PDF → approved file ID check
+                       ↓
+                approval_gate: interrupt()
+                       ↓
+GET /v1/runtime/reviews/{id} [compliance/admin, no self-review]
+POST /v1/runtime/tasks/{id}/review {approved: bool}
+                       ↓
+                task ledger stores reviewer decision (trusted)
+                       ↓
+                Command(resume=...) → ledger check → PDF read again → finish
+```
+
+`TaskLedger` records task IDs, actors, role, request-hash, file ID, status and
+reviewer decision, **not** raw questions, answers or parsed PDF. `SqliteSaver`
+holds the full graph state and can store the question and parsed content: use
+restricted local storage and explicit retention. Separate task IDs are stable
+across retries of the same idempotency key. No arbitrary filesystem paths or
+shell are permitted.
+
+**Recovery guarantee boundary**: the demo recovers pending human approvals
+across process restarts. If a non-approval step crashes partway through, it is
+marked failed rather than auto-replayed. For any future side-effecting tool,
+add a transactional outbox/tool-specific idempotency key and reconciliation;
+LangGraph checkpointing alone is not exactly-once execution. SQLite and
+`RLock` protect a *single local worker*, not a distributed deployment.
+
+The previous `/v1/tasks` and `/v1/agent/tasks` routes remain unchanged,
+so approval enforcement must be selected through the new runtime endpoints.
+The demo has publicly known static API keys; never bind it to a public address.

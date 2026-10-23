@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "roledock"
-version = "0.3.0"
+version = "0.4.0"
 description = "Role-aware, security-first enterprise multi-agent platform (portfolio reconstruction)"
 readme = "README.md"
 requires-python = ">=3.11"
