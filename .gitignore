@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.venv/
+.env
+*.sqlite*
+.qdrant/
+.state/
+*.log
+*.pdf
+!docs/*.pdf
+.DS_Store
