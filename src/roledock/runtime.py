@@ -51,44 +51,7 @@ class RoleDock:
             return ExecutionResult(str(uuid4()), principal.user_id, profile.name, expert, tool, "failed", str(exc), [], events)
 
 
-def build_langgraph(service: RoleDock, checkpointer=None):
-    """Optional real LangGraph orchestration; install `pip install -e '.[agent]'`."""
-    try:
-        from langgraph.graph import StateGraph, START, END
-        from langgraph.checkpoint.memory import InMemorySaver
-    except ImportError as exc:
-        raise RuntimeError("LangGraph not installed. Run: pip install -e '.[agent]'") from exc
-    from typing import TypedDict, NotRequired
-
-    class TaskState(TypedDict):
-        principal: Principal
-        question: str
-        file_id: NotRequired[str | None]
-        role: NotRequired[str]
-        expert: NotRequired[str]
-        tool: NotRequired[str]
-        result: NotRequired[dict]
-
-    def load_role(state: TaskState):
-        role = state["principal"].role
-        if role not in service.profiles:
-            raise AccessDenied("unknown_role")
-        return {"role": role}
-
-    def route(state: TaskState):
-        expert, tool = route_task(state["question"])
-        return {"expert": expert, "tool": tool}
-
-    def execute(state: TaskState):
-        result = service.execute(state["principal"], state["question"], state.get("file_id"))
-        return {"result": asdict(result)}
-
-    graph = StateGraph(TaskState)
-    graph.add_node("load_role", load_role)
-    graph.add_node("route_task", route)
-    graph.add_node("authorized_execution", execute)
-    graph.add_edge(START, "load_role")
-    graph.add_edge("load_role", "route_task")
-    graph.add_edge("route_task", "authorized_execution")
-    graph.add_edge("authorized_execution", END)
-    return graph.compile(checkpointer=checkpointer or InMemorySaver())
+def build_langgraph(service: RoleDock, checkpointer=None, model=None):
+    """Compatibility entrypoint for the policy-gated conditional expert graph."""
+    from .agent_graph import build_agent_graph
+    return build_agent_graph(service, model=model, checkpointer=checkpointer)

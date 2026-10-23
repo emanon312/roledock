@@ -1,79 +1,113 @@
 # RoleDock — 企业多角色 Agent 系统（独立复刻）
 
-> **注意**：这是基于个人简历公开描述独立构建的作品集项目，**不是** ATM Capital 内部源代码、真实数据、原始项目交付物或原始评测集。所有 demo 文档均为合成内容。本仓库当前为 **v0.2 offline security-first foundation**，尚非简历所有能力的完整复现。
+> **边界声明**：本仓库从公开简历描述出发进行独立重构，不包含 ATM Capital 的源代码、商业信息、生产配置、真实文档或原始评测集。所有演示文档与攻击集均为合成数据。这里展示的是新的可验证实现，不代表原公司实际部署情况。
 
-## 核心设计
+**当前状态：v0.3 / 功能性开发版本，不可公网部署。** GitHub PR #1 中持续开发。具备离线演示，以及可选择接入 **Qdrant + FastEmbed** 和 **LangGraph + OpenAI-Compatible Chat Completions** 的代码路径。
 
-- **双层路由**：服务端角色上下文先行，再进行任务选择。
-- **多层鉴权**：工具执行前、Qdrant 检索条件、召回结果、原文回读均校验权限。
-- **最小权限**：财务 PDF 读取走批准文件 ID；不授予通用 Shell。
-- **可溯源**：每个离线检索结果都有 `document_id / partition / source`。
-- **可扩展**：预留 LangGraph、Qdrant、FastEmbed、SiYuan 接口。
+## 架构与信任边界
 
-## 运行（不需要 LLM API Key）
+```text
+Client (demo key; LOCAL ONLY)
+   │
+FastAPI identity boundary → principal = {actor, role}    [role never from body or model]
+   │
+Role Profile (server-defined tool whitelist + partition ACL)
+   │
+LangGraph: load_role → route → policy gate
+   │                ├── knowledge_expert → prefiltered Qdrant → trusted chunk readback ─┐
+   │                ├── research_expert → bounded LLM planning                      ─────┤
+   │                └── document_expert → approved PDF ID registry                 ──────┤
+   │                                                                               finish
+   └── checkpoint (optional SqliteSaver) / metadata-only audit
+```
+
+- **Role before task**：先建立身份和 Role Profile，模型只能提议在该角色白名单中的工具，执行前再校验。
+- **Qdrant is an untrusted index**：payload 只存 `chunk_id/source_id/partition/fingerprint` 等索引元数据，不存正文。检索使用分区过滤，回读服务端可信切片并验证 ID、分区、内容指纹。对伪造的索引元数据 fail closed。
+- **LLM never executes tools**：模型可分类请求、总结检索证据和制定研究计划，但真正的工具调用由 LangGraph 中确定性的专家节点处理。
+- **Source isolation**：演示中权威来源是应用启动加载的合成 JSON 文档；向量索引变化或文档版本不匹配时拒绝返回。生产环境必须换持久化受控文档存储。
+
+## ① 无模型、无外部服务的离线演示
+
+Python 3.11+：
 
 ```bash
 python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS / Linux: source .venv/bin/activate
-pip install -e '.[test]'
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Linux/macOS: source .venv/bin/activate
+python -m pip install -e '.[test]'
 pytest -q
-uvicorn roledock.api:app --reload
+uvicorn roledock.api:app --host 127.0.0.1 --port 8000
 ```
 
-访问 http://127.0.0.1:8000/docs ，使用下方任一 **本地演示** API key：
+访问 `http://127.0.0.1:8000/docs`，在 HTTP 请求中传 `X-Demo-Key: demo-investor-key`（其他演示角色：`demo-finance-key`、`demo-ir-key`、`demo-ops-key`、`demo-deal-key`、`demo-compliance-key`、`demo-admin-key`）。
 
-- `demo-investor-key`
-- `demo-ir-key`
-- `demo-finance-key`
-- `demo-ops-key`
-- `demo-admin-key`
-- `demo-deal-key`
-- `demo-compliance-key`
+原 `/v1/tasks` 使用**词项检索 + 确定性路由**，不代表向量/模型执行。
+
+## ② 真正的向量检索：BGE-small-zh-v1.5 + Qdrant
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/tasks \
-  -H 'Content-Type: application/json' \
-  -H 'X-Demo-Key: demo-ir-key' \
-  -d '{"question":"请检索公司财务和交易政策"}'
+python -m pip install -e '.[rag]'
+# First use downloads ~90 MB ONNX embedding model and needs network access.
+# Option A: persistent embedded Qdrant (default .qdrant directory):
+roledock-index index
+
+# Option B: Qdrant service (run `docker compose up -d qdrant` first):
+# export ROLEDOCK_QDRANT_URL=http://127.0.0.1:6333
+# roledock-index index
+
+# Activate retrieval in this shell BEFORE starting the API/agent:
+# export ROLEDOCK_RETRIEVAL_MODE=qdrant  (PowerShell: $env:ROLEDOCK_RETRIEVAL_MODE='qdrant')
+uvicorn roledock.api:app --host 127.0.0.1 --port 8000
 ```
 
-切记：这些密钥写在代码中，只用于本地功能演示。**不要将当前 API 开放公网。**
+`roledock-index index` **仅允许可信本地操作员执行**，会重建对应 Qdrant collection；这是非零停机的演示设计，不是生产迁移流程。服务端须访问与索引脚本相同的 Qdrant 存储，不能将 `.qdrant` 作为多进程共享数据库。生产请采用远程 Qdrant、版本化 collection/别名切换、变更审计和持久化文档存储。
 
-## 实验性可选模块
+可以打开 `/v1/tasks` 执行原路由并走真实的向量检索（切换环境变量后重启服务）。模型不需要参与向量化；Embedding 和聊天模型分别可配置。
+
+## ③ LangGraph 条件专家节点 + OpenAI-Compatible 模型
 
 ```bash
-pip install -e '.[agent,rag]'
+python -m pip install -e '.[agent,rag]'
+# Select a provider supporting /chat/completions; provider/model compatibility varies.
+# export ROLEDOCK_LLM_BASE_URL=https://YOUR-ENDPOINT/v1
+# export ROLEDOCK_LLM_MODEL=YOUR-MODEL
+# export ROLEDOCK_LLM_API_KEY=YOUR-PRIVATE-KEY
+# export LANGGRAPH_STRICT_MSGPACK=true
+
+# LLM-connected orchestration; optionally combine with ROLEDOCK_RETRIEVAL_MODE=qdrant
+roledock-agent '帮我规划新能源汽车行业研究' --role investor --checkpoint .state/graph.sqlite
+
+# Zero-token local graph (still requires LangGraph):
+roledock-agent '帮我检索新能源汽车研究材料' --role investor --no-model --checkpoint .state/graph.sqlite
 ```
 
-- `roledock.runtime.build_langgraph(...)`：LangGraph 的真实 StateGraph + `InMemorySaver` 入口；进程重启后不会持久恢复，生产版应接持久化 Checkpointer。
-- `roledock.qdrant_adapter.QdrantSecureRetriever`：Qdrant ACL 过滤 + 可信源文档回读，**不再信任向量库返回的正文**；需自建 collection、选择 embedding 模型并完成写入。
-- `roledock.siyuan.SiYuanClient`：访问本地 SiYuan 的只读 API，尚未接到默认知识索引管线。
+Graph path: `load_role → route → {knowledge_expert | research_expert | document_expert | policy_denied} → finish`。`SqliteSaver` 中的任务状态可在重启后检查；**这一版只证明已完成步骤的 checkpoint 持久化，不声称支持任意中断后的安全重试或 HITL**。Checkpoint 可能存储检索正文，必须使用私有目录、限制操作系统权限，并制定保留/删除策略。
 
-这些集成是**代码级适配器**，不能误写成已经完成端到端联调。
+如需本地通过 API 调用模型 Agent：
 
-## v0.2 新增
+```bash
+# ONLY localhost; do not expose demo keys to other machines.
+# export ROLEDOCK_ENABLE_AGENT_API=1
+uvicorn roledock.api:app --host 127.0.0.1 --port 8000
+# POST /v1/agent/tasks with X-Demo-Key header; model env vars must be set
+```
 
-- 交易执行与合规风控两个演示角色（共七类），12 个合成知识分区。
-- 可复现的固定窗口切片和 SHA-256 指纹，禁止 agent 直接指定任意本地路径。
-- 基于 SQLite 的元数据审计日志：记录 task/actor/role/tool/status，不保存提示词或 RAG 正文。
-- 搜索无命中时返回空结果，避免无关文档回退。
-- 新增 `GET /v1/tasks/{task_id}/audit`，仅本人可读取审计元信息。
-- Qdrant 检索适配器强制回读权威文档并比对索引分区元信息（仍需真实服务联调）。
+OpenAI SDK 统一 `api_key / base_url / model`，只使用 Chat Completions 的文本输入/输出能力，不假设任意兼容提供方都支持 JSON 模式、function calling 或某个特定参数。错误的路由 JSON/越权工具选择会被拒绝，而不是执行。
 
-详见 [设计决策](docs/DECISIONS.md)、[验收及待办](docs/NEXT_PHASE.md)。
+## 测试与说明
 
-## 安全测试
+```bash
+pytest -q                              # offline tests; optional integrations may skip
+python -m pip install -e '.[all]'
+pytest -q tests/test_integrations.py  # real Qdrant local + LangGraph + SQLite (no API key)
+```
 
-`tests/test_regression.py` 生成 `6 个受限分区 × 3 类路径 = 18 条` 确定性回归测试（合成数据）；通过后只说明这 18 条新测试通过，并不等于完整的真实-world 100% 防护，也不等于原公司测试原样复现。
+- `tests/test_regression.py`：6 个受限分区 × 3 条路径的 **18 条合成权限回归**，与原公司测试集无关。
+- `tests/test_qdrant_unit.py`：验证注入非法 partition、篡改 fingerprint、payload 伪造正文时 fail closed。
+- `tests/test_model_provider.py`：Fake Chat Completions 响应，不消耗真实 API 额度，验证模型无法扩权。
+- `tests/test_integrations.py`：用真实 Qdrant 的 `:memory:` 模式与**确定性测试 Encoder**验证向量往返；使用真实 LangGraph、SQLite 验证路由和已完成任务的 checkpoint 读取。**不在 CI 下载 BGE 模型或拨打 LLM API**。
+- 真实 BGE 下载与远端模型服务须在用户环境另行验证；未运行时不能声称完整线上联调已完成。
 
-## 里程碑
+**安全警示**：此仓库使用公开 Demo API Keys，只允许回环地址本地运行。不存在真正的企业 SSO、租户隔离、密钥轮换、输入配额、PII 清洗、完整审计保留或任意中断后幂等恢复。千万不要把 demo 直接部署到公网。
 
-- [x] v0.1：架构、角色策略、受限知识样例、双层路由、受控 PDF、基本 API、18 条合成回归
-- [x] v0.2 基础：角色重设计、可重复切片、元数据审计、受控 Qdrant 回读适配器
-- [ ] v0.2 完整：真实 Qdrant + FastEmbed/BGE 数据写入和联调
-- [ ] v0.3：LangGraph 主干 + 专家 Agent + 持久化 Checkpointer + Human-in-the-loop
-- [ ] v0.4：SiYuan 同步、文件处理沙箱、Gateway 守护 + 告警
-- [ ] v0.5：评测中心、攻击集、任务指标与演示前端
-
-详见 [架构及问题](docs/ARCHITECTURE.md)。
+详见 [架构](docs/ARCHITECTURE.md)、[设计决策](docs/DECISIONS.md)、[下一步](docs/NEXT_PHASE.md)。

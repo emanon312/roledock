@@ -20,3 +20,14 @@ def test_api_does_not_accept_claimed_role():
 def test_health_reports_not_ready():
     response = client.get("/health")
     assert response.json()["production_ready"] is False
+
+
+def test_agent_api_disabled_by_default():
+    # Unauthorized callers cannot probe model configuration.
+    response = client.post("/v1/agent/tasks", json={"question": "你好"})
+    assert response.status_code == 401
+    from roledock.api import configured_agent_graph
+    configured_agent_graph.cache_clear()
+    response = client.post("/v1/agent/tasks", headers={"X-Demo-Key": "demo-ir-key"}, json={"question": "你好"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "agent_api_not_enabled"

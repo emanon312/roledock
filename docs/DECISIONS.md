@@ -1,41 +1,22 @@
-# Architecture decision records — RoleDock (reconstruction)
+# RoleDock Architecture Decisions
 
-## ADR-001: Rebuild, do not mimic unknown historical implementation
+## ADR-001: Independent reconstruction
+The code and synthetic content are newly created from a high-level public CV; never import source or documents from the employer.
 
-The original internship used a mixed agent stack, but internals are not documented
-well enough to reproduce exactly. We deliberately rebuild with one LangGraph
-orchestration boundary and a deterministic authorization layer. Do not claim
-this was the employer's actual implementation.
+## ADR-002: Role and tool gates are deterministic
+The model may propose only known tools; membership in server-side `allowed_tools` is verified independently before dispatch. Each expert re-checks tool authorization. No model-produced role is trusted.
 
-## ADR-002: Role first, task second
+## ADR-003: Qdrant is only an index
+Source text stays in a vetted authoritative chunk store. Qdrant carries only identifiers, ACL partition and content fingerprint. Pre-filter on authorized partitions, then verify IDs/partition/fingerprint against trusted source readback. On mismatch, deny rather than partially returning data.
 
-The authenticated principal maps to a server-side role profile; only then can a
-router propose a specialist/tool. Tool execution validates authority again.
-User messages and retrieved documents can never alter the active role.
+## ADR-004: Initial RAG storage is intentionally constrained
+Index reconstruction from the synthetic JSON is reliable for demo only. Index rebuild deletes the demo collection; production requires immutable source versions, durable source store and blue/green index aliases.
 
-## ADR-003: Investment-oriented roles
+## ADR-005: Model compatibility without provider-specific tools
+Only a common Chat Completions text request is assumed; the model is never supplied a direct shell, Git or database tool. Route output must be a JSON object with an allowed tool name. Invalid responses fail closed.
 
-Initial roles: research/investor, deal execution, IR, finance, operations,
-compliance, plus a demo-only admin profile. The role/partition matrix is a
-reconstruction based on business requirements, not a recovered employer policy.
-Demo admin has broad read permissions for testing; it must not be copied into
-production access control.
+## ADR-006: LangGraph checkpoint is a development feature
+SQLite checkpoint provides persistence for completed states, not a tested enterprise crash-recovery guarantee. State may contain raw retrieved text; secure and rotate stored files. Use `LANGGRAPH_STRICT_MSGPACK=true` and consider PostgreSQL for concurrency.
 
-## ADR-004: Trusted source vs vector index
-
-A vector index is not an authority for original document bytes. It provides
-candidate document IDs, scores and partition tags. All content must be read from
-an authoritative source with a separate ACL check, and the source partition must
-match the indexed payload. There is no permissive fallback.
-
-## ADR-005: Privacy-preserving audit
-
-Only actor, role, selected expert/tool, task ID and status are stored in the
-offline audit journal. Prompts and retrieved text are excluded. SQLite demo
-journal is separate from future LangGraph checkpoint storage.
-
-## ADR-006: Source honesty
-
-All synthetic documents, fabricated role matrix, and newly created evaluation
-cases must be clearly labeled. Numbers from the original resume are not to be
-represented as independently reproduced measures.
+## ADR-007: Public demo is not a production auth system
+Static keys are exposed in source; bind to localhost. All new endpoints inherit the same limitation. Do not upload proprietary materials or expose to the internet.
